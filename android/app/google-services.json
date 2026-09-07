@@ -1,0 +1,158 @@
+{
+  "project_info": {
+    "project_number": "186352700746",
+    "project_id": "gen-lang-client-0541040108",
+    "storage_bucket": "gen-lang-client-0541040108.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:186352700746:android:d9d481d08739238b8985b3",
+        "android_client_info": {
+          "package_name": "com.accibradford.acci_bradford"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGUPGCjuZoUlKdyMEPPSHP4IpbOglzX08"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:186352700746:android:e14850d01f96cf718985b3",
+        "android_client_info": {
+          "package_name": "com.bryloq.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "186352700746-29lsg2jejh64ud5hds26tjeh50u1ee2o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bryloq.app",
+            "certificate_hash": "8f30c376134a08e2d520d671aa650d6420ea7ab0"
+          }
+        },
+        {
+          "client_id": "186352700746-al0vp6qdvc2f4nkqlj3j7g9aplp1f8l5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bryloq.app",
+            "certificate_hash": "a3effed147e5a22770e245fd7fa81da487324218"
+          }
+        },
+        {
+          "client_id": "186352700746-gcdr7n2ivj0itdns3hn5qvmv96nqk68e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bryloq.app",
+            "certificate_hash": "c1cb298e462850ec000301449dca34f57aa24870"
+          }
+        },
+        {
+          "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGUPGCjuZoUlKdyMEPPSHP4IpbOglzX08"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:186352700746:android:586c9007cd0dc6628985b3",
+        "android_client_info": {
+          "package_name": "com.example.saydo_ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGUPGCjuZoUlKdyMEPPSHP4IpbOglzX08"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:186352700746:android:2c95a97d1fd8e1f48985b3",
+        "android_client_info": {
+          "package_name": "com.saydoai.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "186352700746-khr0ldt3eskvjuimrv5eu9h7dj9rp42f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.saydoai.app",
+            "certificate_hash": "fa9c1638c4464cf063da123c69641eeaec944532"
+          }
+        },
+        {
+          "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGUPGCjuZoUlKdyMEPPSHP4IpbOglzX08"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
