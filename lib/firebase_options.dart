@@ -64,6 +64,7 @@ class DefaultFirebaseOptions {
     projectId: 'gen-lang-client-0541040108',
     storageBucket: 'gen-lang-client-0541040108.firebasestorage.app',
     androidClientId: '186352700746-29lsg2jejh64ud5hds26tjeh50u1ee2o.apps.googleusercontent.com',
+    iosClientId: '186352700746-rhjnj5a1q75vahjntvbh00hgi96rvmdi.apps.googleusercontent.com',
     iosBundleId: 'com.bryloq.app',
   );
   static const FirebaseOptions macos = FirebaseOptions(

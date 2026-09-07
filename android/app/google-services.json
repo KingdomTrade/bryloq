@@ -14,7 +14,7 @@
       },
       "oauth_client": [
         {
-          "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+          "client_id": "186352700746-qmvdkj6rm28v00ubgfr1a21dhfgrc1qm.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -29,6 +29,13 @@
             {
               "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "186352700746-cv1f32vhtlt6e1fk5a2gnmpk9np82kp1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.saydoAi"
+              }
             }
           ]
         }
@@ -67,7 +74,7 @@
           }
         },
         {
-          "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+          "client_id": "186352700746-qmvdkj6rm28v00ubgfr1a21dhfgrc1qm.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -82,6 +89,13 @@
             {
               "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "186352700746-cv1f32vhtlt6e1fk5a2gnmpk9np82kp1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.saydoAi"
+              }
             }
           ]
         }
@@ -96,7 +110,23 @@
       },
       "oauth_client": [
         {
-          "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+          "client_id": "186352700746-i5v8dt1r184v2bnngdidu0eed5i83go0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.saydo_ai",
+            "certificate_hash": "90a53c35d220bb994045e5dee62fa8e63697d594"
+          }
+        },
+        {
+          "client_id": "186352700746-ridgbfnpmvv2iedjavjnemm37mvodik6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.saydo_ai",
+            "certificate_hash": "fa9c1638c4464cf063da123c69641eeaec944532"
+          }
+        },
+        {
+          "client_id": "186352700746-qmvdkj6rm28v00ubgfr1a21dhfgrc1qm.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -111,6 +141,13 @@
             {
               "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "186352700746-cv1f32vhtlt6e1fk5a2gnmpk9np82kp1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.saydoAi"
+              }
             }
           ]
         }
@@ -133,7 +170,7 @@
           }
         },
         {
-          "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
+          "client_id": "186352700746-qmvdkj6rm28v00ubgfr1a21dhfgrc1qm.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -148,6 +185,13 @@
             {
               "client_id": "186352700746-fpgqspfani3fdnpa93ht8uckqkni1l3t.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "186352700746-cv1f32vhtlt6e1fk5a2gnmpk9np82kp1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.saydoAi"
+              }
             }
           ]
         }

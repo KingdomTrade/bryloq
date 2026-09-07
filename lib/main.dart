@@ -41,7 +41,7 @@ Future<void> main() async {
       ? const AndroidPlayIntegrityProvider()
       : const AndroidDebugProvider(),
   providerApple: kReleaseMode
-      ? const AppleDeviceCheckProvider()
+      ? const AppleAppAttestWithDeviceCheckFallbackProvider()
       : const AppleDebugProvider(),
 );
 
