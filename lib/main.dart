@@ -212,12 +212,16 @@ class _HomeScreenState extends State<HomeScreen>
 
   bool _calendarConnected = false;
   bool _calendarSyncing = false;
-  String? _calendarEmail;
   List<GoogleCalendarEvent> _calendarEventsToday = [];
 
   List<AiAction> _aiActions = [];
+  final Map<int, String> _aiPriorityOverrides = <int, String>{};
   List<SayDoTask> _savedTasks = [];
   DayPlan? _todayPlan;
+  BryloqNotificationAction? _pendingNotificationAction;
+  bool _exactReminderPromptShown = false;
+  bool _fullScreenAlertPromptShown = false;
+  String? _activeHighPriorityAlarmTaskId;
 
   String? _inputSourceLabel;
 
@@ -250,6 +254,10 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
 
+    NotificationService.instance.setActionHandler(
+      _handleNotificationAction,
+    );
+
     _initializeSpeech();
     _initialiseDatabase();
     _requestNotificationPermissions();
@@ -270,6 +278,615 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  Future<void> _handleNotificationAction(
+    BryloqNotificationAction action,
+  ) async {
+    if (!mounted) {
+      return;
+    }
+
+    if (!_databaseReady) {
+      _pendingNotificationAction = action;
+      return;
+    }
+
+    if (action.isMorningBriefing) {
+      setState(() {
+        _selectedNavIndex = 0;
+      });
+      return;
+    }
+
+    if (!action.isTask || action.taskId == null) {
+      return;
+    }
+
+    SayDoTask? task;
+    for (final candidate in _savedTasks) {
+      if (candidate.id == action.taskId) {
+        task = candidate;
+        break;
+      }
+    }
+
+    if (task == null) {
+      await _loadSavedTasks();
+
+      for (final candidate in _savedTasks) {
+        if (candidate.id == action.taskId) {
+          task = candidate;
+          break;
+        }
+      }
+    }
+
+    if (task == null || !mounted) {
+      return;
+    }
+
+    if (action.isDueNow &&
+        !action.isDone &&
+        !action.isSnooze5 &&
+        !action.isSnooze15 &&
+        _normalisePriority(task.priority) == 'high') {
+      await _showHighPriorityAlarm(task);
+      return;
+    }
+
+    if (action.isDone) {
+      if (!task.completed) {
+        await _toggleTask(task);
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${task.title} marked done.'),
+        ),
+      );
+      return;
+    }
+
+    if (action.isSnooze5 || action.isSnooze15) {
+      final minutes = action.isSnooze5 ? 5 : 15;
+
+      await NotificationService.instance.snoozeTask(
+        task,
+        Duration(minutes: minutes),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${task.title} snoozed for $minutes minutes.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _selectedNavIndex = 0;
+    });
+  }
+
+  Future<void> _showHighPriorityAlarm(
+    SayDoTask task,
+  ) async {
+    if (!mounted || _activeHighPriorityAlarmTaskId == task.id) {
+      return;
+    }
+
+    _activeHighPriorityAlarmTaskId = task.id;
+
+    final dueTime = task.time?.trim().isNotEmpty == true
+        ? task.time!.trim()
+        : 'now';
+
+    try {
+      await Navigator.of(context).push<void>(
+        PageRouteBuilder<void>(
+          opaque: true,
+          fullscreenDialog: true,
+          transitionDuration: const Duration(milliseconds: 260),
+          reverseTransitionDuration: const Duration(milliseconds: 180),
+          pageBuilder: (routeContext, animation, secondaryAnimation) {
+            return PopScope(
+              canPop: false,
+              child: Scaffold(
+                body: Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0xFF25133F),
+                        Color(0xFF5B2CC8),
+                        Color(0xFF7D55E8),
+                      ],
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 22, 24, 28),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.22),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'BRYLOQ • HIGH PRIORITY',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    letterSpacing: 1.2,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          Container(
+                            width: 112,
+                            height: 112,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.14),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.28),
+                                width: 2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.20),
+                                  blurRadius: 30,
+                                  offset: const Offset(0, 16),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.alarm_rounded,
+                              color: Colors.white,
+                              size: 58,
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+                          const Text(
+                            'DUE NOW',
+                            style: TextStyle(
+                              color: Color(0xFFE7DCFF),
+                              fontSize: 14,
+                              letterSpacing: 2.3,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            task.title,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 34,
+                              height: 1.08,
+                              letterSpacing: -0.8,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            dueTime == 'now'
+                                ? 'This high-priority task needs your attention.'
+                                : 'Scheduled for $dueTime • High priority',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.82),
+                              fontSize: 16,
+                              height: 1.4,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (task.notes?.trim().isNotEmpty == true) ...[
+                            const SizedBox(height: 18),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: Text(
+                                task.notes!.trim(),
+                                textAlign: TextAlign.center,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.88),
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const Spacer(),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFF4E24B5),
+                                padding: const EdgeInsets.symmetric(vertical: 17),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                              onPressed: () async {
+                                Navigator.of(routeContext).pop();
+                                if (!task.completed) {
+                                  await _toggleTask(task);
+                                }
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('${task.title} marked done.'),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.check_circle_rounded),
+                              label: const Text(
+                                'DONE',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(
+                                      color: Colors.white.withValues(alpha: 0.55),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 15),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                  ),
+                                  onPressed: () async {
+                                    Navigator.of(routeContext).pop();
+                                    await NotificationService.instance.snoozeTask(
+                                      task,
+                                      const Duration(minutes: 5),
+                                    );
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '${task.title} snoozed for 5 minutes.',
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text(
+                                    'SNOOZE 5 MIN',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(
+                                      color: Colors.white.withValues(alpha: 0.55),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 15),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                  ),
+                                  onPressed: () async {
+                                    Navigator.of(routeContext).pop();
+                                    await NotificationService.instance.snoozeTask(
+                                      task,
+                                      const Duration(minutes: 15),
+                                    );
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '${task.title} snoozed for 15 minutes.',
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text(
+                                    'SNOOZE 15 MIN',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'High-priority alarms are designed to be acted on, '
+                            'completed or snoozed.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.65),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOut,
+              ),
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.985, end: 1).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
+                child: child,
+              ),
+            );
+          },
+        ),
+      );
+    } finally {
+      _activeHighPriorityAlarmTaskId = null;
+    }
+  }
+
+  Future<void> _processPendingNotificationAction() async {
+    final action = _pendingNotificationAction;
+    if (action == null) {
+      return;
+    }
+
+    _pendingNotificationAction = null;
+    await _handleNotificationAction(action);
+  }
+
+  Future<void> _requestNotificationPermissionFromSettings() async {
+    final notificationsGranted =
+        await NotificationService.instance.requestPermissions();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!notificationsGranted) {
+      final openSettings = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Turn on BRYLOQ notifications'),
+            content: const Text(
+              'Notifications are currently blocked for BRYLOQ. '
+              'Open your phone settings and allow notifications so reminders can appear.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Not now'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Open settings'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (openSettings == true) {
+        await NotificationService.instance.openNotificationSettings();
+      }
+      return;
+    }
+
+    final exactTimingGranted =
+        await NotificationService.instance.requestExactReminderPermission();
+
+    final fullScreenGranted =
+        await NotificationService.instance.requestFullScreenIntentPermission();
+
+    if (exactTimingGranted) {
+      try {
+        await NotificationService.instance
+            .refreshTaskReminders(_savedTasks);
+        await NotificationService.instance
+            .refreshMorningBriefings(_savedTasks);
+      } catch (e) {
+        debugPrint('Reminder refresh after permission error: $e');
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          exactTimingGranted && fullScreenGranted
+              ? 'BRYLOQ notifications, precise timing and high-priority full-screen alerts are enabled.'
+              : exactTimingGranted
+                  ? 'Precise reminders are enabled. Full-screen high-priority alerts are optional and may need to be allowed in Android settings.'
+                  : 'Notifications are enabled, but precise reminder timing is off. '
+                      'Allow Alarms & reminders for exact 30, 15, 5 minute and due-time alerts.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _maybePromptForHighPriorityFullScreenAlerts() async {
+    if (kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android ||
+        _fullScreenAlertPromptShown ||
+        !mounted) {
+      return;
+    }
+
+    _fullScreenAlertPromptShown = true;
+
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          icon: const Icon(
+            Icons.alarm_rounded,
+            color: Color(0xFF6D3DF5),
+            size: 36,
+          ),
+          title: const Text('High-priority full-screen alerts'),
+          content: const Text(
+            'For tasks you mark High, BRYLOQ can wake the screen and show a '
+            'full-screen alarm when the task is due. Android requires separate '
+            'permission for this. If you leave it off, you will still receive '
+            'the normal high-priority notification.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Not now'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.notifications_active_rounded),
+              label: const Text('Allow full-screen alerts'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (enable != true) {
+      return;
+    }
+
+    final granted =
+        await NotificationService.instance.requestFullScreenIntentPermission();
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          granted
+              ? 'High-priority full-screen alerts are enabled.'
+              : 'Full-screen alerts are not enabled. BRYLOQ will use a maximum-importance heads-up alarm instead.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _maybePromptForPreciseReminders() async {
+    if (kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android ||
+        _exactReminderPromptShown) {
+      return;
+    }
+
+    final exactAllowed =
+        await NotificationService.instance.canScheduleExactReminders();
+
+    if (exactAllowed || !mounted) {
+      return;
+    }
+
+    _exactReminderPromptShown = true;
+
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Keep BRYLOQ reminders on time'),
+          content: const Text(
+            'Android needs Alarms & reminders access so BRYLOQ can alert you '
+            'at the exact 30, 15, 5 minute and due-time points even when '
+            'BRYLOQ is not open.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Not now'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Enable precise reminders'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (enable != true) {
+      return;
+    }
+
+    final granted =
+        await NotificationService.instance.requestExactReminderPermission();
+
+    if (granted) {
+      await NotificationService.instance.refreshTaskReminders(_savedTasks);
+      await NotificationService.instance.refreshMorningBriefings(_savedTasks);
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          granted
+              ? 'Precise BRYLOQ reminders are enabled.'
+              : 'Precise reminders are still off. You can enable them later '
+                  'from BRYLOQ → Notification permission.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _initialiseGoogleCalendar() async {
     try {
       await _calendarService.initialise();
@@ -280,7 +897,6 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _calendarConnected = _calendarService.isConnected;
-        _calendarEmail = _calendarService.email;
       });
 
       if (_calendarService.isConnected) {
@@ -317,7 +933,6 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _calendarConnected = true;
-        _calendarEmail = account.email;
       });
 
       await _syncGoogleCalendar(silent: true);
@@ -385,7 +1000,6 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _calendarConnected = true;
-        _calendarEmail = _calendarService.email;
         _calendarEventsToday = events;
       });
 
@@ -429,7 +1043,6 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _calendarConnected = false;
-        _calendarEmail = null;
         _calendarEventsToday = [];
       });
 
@@ -551,6 +1164,17 @@ class _HomeScreenState extends State<HomeScreen>
       await _taskDatabase.initialise();
       await _dayPlanDatabase.initialise();
       await _loadSavedTasks();
+
+      // Rebuild Android alarms from the saved task database. This makes
+      // reminders independent of the Flutter UI process and also upgrades
+      // schedules after exact-alarm access or an app update.
+      try {
+        await NotificationService.instance
+            .refreshTaskReminders(_savedTasks);
+      } catch (e) {
+        debugPrint('Startup task reminder refresh error: $e');
+      }
+
       await _loadTodayPlan();
 
       if (!mounted) {
@@ -560,6 +1184,8 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         _databaseReady = true;
       });
+
+      await _processPendingNotificationAction();
     } catch (e) {
       if (!mounted) {
         return;
@@ -606,6 +1232,8 @@ class _HomeScreenState extends State<HomeScreen>
     });
 
     try {
+      await NotificationService.instance
+          .maybeShowMorningBriefingOnAppOpen(tasks);
       await NotificationService.instance
           .refreshMorningBriefings(tasks);
     } catch (e) {
@@ -688,6 +1316,7 @@ class _HomeScreenState extends State<HomeScreen>
         _showTypeComposer = false;
         _spokenText = text;
         _aiActions = [];
+        _aiPriorityOverrides.clear();
         _inputSourceLabel = null;
       });
 
@@ -716,6 +1345,7 @@ class _HomeScreenState extends State<HomeScreen>
       _showTypeComposer = false;
       _spokenText = '';
       _aiActions = [];
+      _aiPriorityOverrides.clear();
       _isProcessingAi = true;
       _inputSourceLabel = 'Reading shared $fileName...';
     });
@@ -744,6 +1374,16 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _aiActions = actions;
+        _aiPriorityOverrides
+          ..clear()
+          ..addEntries(
+            actions.asMap().entries.map(
+              (entry) => MapEntry(
+                entry.key,
+                _normalisePriority(entry.value.priority),
+              ),
+            ),
+          );
       });
 
       if (actions.isEmpty) {
@@ -754,6 +1394,8 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
         );
+      } else {
+        await _choosePrioritiesForActions(actions);
       }
     } catch (e) {
       if (!mounted) {
@@ -801,6 +1443,7 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() {
       _spokenText = '';
       _aiActions = [];
+      _aiPriorityOverrides.clear();
       _inputSourceLabel = null;
       _isListening = true;
     });
@@ -857,6 +1500,7 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() {
       _spokenText = '';
       _aiActions = [];
+      _aiPriorityOverrides.clear();
       _inputSourceLabel = null;
       _showTypeComposer = false;
     });
@@ -870,6 +1514,7 @@ class _HomeScreenState extends State<HomeScreen>
 
       if (_showTypeComposer) {
         _aiActions = [];
+        _aiPriorityOverrides.clear();
         _inputSourceLabel = null;
       }
     });
@@ -890,10 +1535,12 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     FocusManager.instance.primaryFocus?.unfocus();
+    _typeController.clear();
 
     setState(() {
       _spokenText = typedText;
       _aiActions = [];
+      _aiPriorityOverrides.clear();
       _inputSourceLabel = null;
       _showTypeComposer = false;
     });
@@ -986,6 +1633,7 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() {
       _spokenText = '';
       _aiActions = [];
+      _aiPriorityOverrides.clear();
       _isProcessingAi = true;
       _inputSourceLabel = progressLabel;
     });
@@ -1003,6 +1651,16 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _aiActions = actions;
+        _aiPriorityOverrides
+          ..clear()
+          ..addEntries(
+            actions.asMap().entries.map(
+              (entry) => MapEntry(
+                entry.key,
+                _normalisePriority(entry.value.priority),
+              ),
+            ),
+          );
       });
 
       if (actions.isEmpty) {
@@ -1013,6 +1671,8 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
         );
+      } else {
+        await _choosePrioritiesForActions(actions);
       }
     } catch (e) {
       if (!mounted) {
@@ -1080,6 +1740,7 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         _spokenText = '';
         _aiActions = [];
+        _aiPriorityOverrides.clear();
         _isProcessingAi = true;
         _inputSourceLabel =
             'Reading ${file.name}...';
@@ -1098,6 +1759,16 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _aiActions = actions;
+        _aiPriorityOverrides
+          ..clear()
+          ..addEntries(
+            actions.asMap().entries.map(
+              (entry) => MapEntry(
+                entry.key,
+                _normalisePriority(entry.value.priority),
+              ),
+            ),
+          );
       });
 
       if (actions.isEmpty) {
@@ -1108,6 +1779,8 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
         );
+      } else {
+        await _choosePrioritiesForActions(actions);
       }
     } catch (e) {
       if (!mounted) {
@@ -1197,11 +1870,21 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _organiseWithAi() async {
-    if (_spokenText.trim().isEmpty) {
+    if (_isListening) {
+      await _stopListening();
+    }
+
+    final input = _spokenText.trim();
+
+    if (input.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Say something first.',
+            'Say or type something first.',
           ),
         ),
       );
@@ -1209,16 +1892,23 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
 
+    _typeController.clear();
+
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
+      _spokenText = '';
       _isProcessingAi = true;
       _aiActions = [];
+      _aiPriorityOverrides.clear();
+      _inputSourceLabel = null;
+      _showTypeComposer = false;
     });
 
     try {
-      final actions =
-          await _aiService.organiseText(
-        _spokenText,
-      );
+      final actions = await _aiService.organiseText(input);
 
       if (!mounted) {
         return;
@@ -1226,6 +1916,16 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _aiActions = actions;
+        _aiPriorityOverrides
+          ..clear()
+          ..addEntries(
+            actions.asMap().entries.map(
+              (entry) => MapEntry(
+                entry.key,
+                _normalisePriority(entry.value.priority),
+              ),
+            ),
+          );
       });
 
       if (actions.isEmpty) {
@@ -1236,7 +1936,10 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
         );
+        return;
       }
+
+      await _choosePrioritiesForActions(actions);
     } catch (e) {
       if (!mounted) {
         return;
@@ -1258,6 +1961,200 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  String _normalisePriority(String? value) {
+    switch (value?.trim().toLowerCase()) {
+      case 'high':
+        return 'high';
+      case 'low':
+        return 'low';
+      case 'medium':
+      case 'normal':
+      default:
+        return 'normal';
+    }
+  }
+
+  String _priorityLabel(String value) {
+    switch (_normalisePriority(value)) {
+      case 'high':
+        return 'High';
+      case 'low':
+        return 'Low';
+      default:
+        return 'Medium';
+    }
+  }
+
+  int _priorityRank(String value) {
+    switch (_normalisePriority(value)) {
+      case 'high':
+        return 0;
+      case 'normal':
+        return 1;
+      case 'low':
+      default:
+        return 2;
+    }
+  }
+
+  Future<void> _choosePrioritiesForActions(
+    List<AiAction> actions,
+  ) async {
+    if (!mounted || actions.isEmpty) {
+      return;
+    }
+
+    final initial = <int, String>{
+      for (int i = 0; i < actions.length; i++)
+        i: _aiPriorityOverrides[i] ??
+            _normalisePriority(actions[i].priority),
+    };
+
+    final selected = await showModalBottomSheet<Map<int, String>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final choices = Map<int, String>.from(initial);
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFFAF8FF),
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(30),
+                ),
+              ),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                20 + MediaQuery.viewInsetsOf(context).bottom,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD5D2DC),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Choose priority',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      actions.length == 1
+                          ? 'How important is this task?'
+                          : 'Set the priority for each action before adding them to BRYLOQ.',
+                      style: const TextStyle(
+                        color: Color(0xFF77747F),
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    for (int i = 0; i < actions.length; i++) ...[
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: const Color(0xFFE8E1F1),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              actions[i].title,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final priority in const [
+                                  'high',
+                                  'normal',
+                                  'low',
+                                ])
+                                  ChoiceChip(
+                                    label: Text(
+                                      _priorityLabel(priority),
+                                    ),
+                                    selected: choices[i] == priority,
+                                    onSelected: (_) {
+                                      setSheetState(() {
+                                        choices[i] = priority;
+                                      });
+                                    },
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.pop(
+                            sheetContext,
+                            Map<int, String>.from(choices),
+                          );
+                        },
+                        icon: const Icon(Icons.check_rounded),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 13),
+                          child: Text('Continue'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (selected == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _aiPriorityOverrides
+        ..clear()
+        ..addAll(selected);
+    });
+  }
+
   Future<void> _saveAiActions() async {
     if (_aiActions.isEmpty) {
       return;
@@ -1269,6 +2166,7 @@ class _HomeScreenState extends State<HomeScreen>
               .microsecondsSinceEpoch;
 
       int scheduledCount = 0;
+      bool hasHighTimedTask = false;
 
       for (int i = 0;
           i < _aiActions.length;
@@ -1282,7 +2180,8 @@ class _HomeScreenState extends State<HomeScreen>
           type: action.type,
           date: action.date,
           time: action.time,
-          priority: action.priority,
+          priority: _aiPriorityOverrides[i] ??
+              _normalisePriority(action.priority),
           recurring: action.recurring,
           recurrence: action.recurrence,
           recurrenceType: action.recurrenceType,
@@ -1299,18 +2198,19 @@ class _HomeScreenState extends State<HomeScreen>
           task,
         );
 
+        if (_normalisePriority(task.priority) == 'high' &&
+            task.date?.trim().isNotEmpty == true &&
+            task.time?.trim().isNotEmpty == true) {
+          hasHighTimedTask = true;
+        }
+
         try {
-          await NotificationService.instance
-              .scheduleTaskReminder(
+          final reminderScheduled =
+              await NotificationService.instance.scheduleTaskReminder(
             task,
           );
 
-          if ((task.reminder != null &&
-                  task.reminder!.trim().isNotEmpty) ||
-              (task.date != null &&
-                  task.date!.trim().isNotEmpty &&
-                  task.time != null &&
-                  task.time!.trim().isNotEmpty)) {
+          if (reminderScheduled) {
             scheduledCount++;
           }
         } catch (e) {
@@ -1331,6 +2231,7 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _aiActions = [];
+        _aiPriorityOverrides.clear();
         _spokenText = '';
         _inputSourceLabel = null;
       });
@@ -1340,7 +2241,7 @@ class _HomeScreenState extends State<HomeScreen>
 
       if (scheduledCount > 0) {
         message +=
-            ' • $scheduledCount ${scheduledCount == 1 ? 'reminder' : 'reminders'} scheduled';
+            ' • $scheduledCount ${scheduledCount == 1 ? 'reminder sequence' : 'reminder sequences'} scheduled';
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1350,6 +2251,14 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
       );
+
+      if (scheduledCount > 0) {
+        await _maybePromptForPreciseReminders();
+      }
+
+      if (hasHighTimedTask) {
+        await _maybePromptForHighPriorityFullScreenAlerts();
+      }
     } catch (e) {
       if (!mounted) {
         return;
@@ -1993,6 +2902,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    NotificationService.instance.setActionHandler(null);
     _speech.stop();
     _shareService.dispose();
     _typeController.dispose();
@@ -2293,18 +3203,7 @@ class _HomeScreenState extends State<HomeScreen>
                 await _sendMorningBriefingNow();
               }
               if (value == 'notification_permission') {
-                final granted = await NotificationService.instance
-                    .requestPermissions();
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      granted
-                          ? 'Notification permission granted.'
-                          : 'Notification permission was not granted.',
-                    ),
-                  ),
-                );
+                await _requestNotificationPermissionFromSettings();
               }
               if (value == 'privacy_policy') {
                 await _openPrivacyPolicy();
@@ -2821,7 +3720,12 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
         const SizedBox(height: 14),
-        ..._aiActions.map((action) => _buildAiActionCard(action)),
+        ..._aiActions.asMap().entries.map(
+          (entry) => _buildAiActionCard(
+            entry.value,
+            entry.key,
+          ),
+        ),
         const SizedBox(height: 5),
         SizedBox(
           width: double.infinity,
@@ -2840,6 +3744,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildAiActionCard(
     AiAction action,
+    int index,
   ) {
     IconData icon;
 
@@ -2885,9 +3790,10 @@ class _HomeScreenState extends State<HomeScreen>
       details.add(action.recurrence!);
     }
 
-    if (action.priority == 'high') {
-      details.add('High priority');
-    }
+    final selectedPriority = _aiPriorityOverrides[index] ??
+        _normalisePriority(action.priority);
+
+    details.add('${_priorityLabel(selectedPriority)} priority');
 
     return Container(
       width: double.infinity,
@@ -2947,6 +3853,27 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                 ],
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: [
+                    for (final priority in const [
+                      'high',
+                      'normal',
+                      'low',
+                    ])
+                      ChoiceChip(
+                        label: Text(_priorityLabel(priority)),
+                        selected: selectedPriority == priority,
+                        onSelected: (_) {
+                          setState(() {
+                            _aiPriorityOverrides[index] = priority;
+                          });
+                        },
+                      ),
+                  ],
+                ),
                 if (action.reminder != null &&
                     action.reminder!.trim().isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -3233,13 +4160,105 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   DateTime? _taskDate(SayDoTask task) {
-    final raw = task.date?.trim();
+    return _parseTaskDateValue(task.date);
+  }
+
+  DateTime? _parseTaskDateValue(String? value) {
+    final raw = value?.trim();
 
     if (raw == null || raw.isEmpty) {
       return null;
     }
 
-    return DateTime.tryParse(raw);
+    final direct = DateTime.tryParse(raw);
+    if (direct != null) {
+      return direct;
+    }
+
+    final lower = raw.toLowerCase();
+    final today = _todayDateOnly();
+
+    if (lower == 'today') {
+      return today;
+    }
+
+    if (lower == 'tomorrow') {
+      return today.add(const Duration(days: 1));
+    }
+
+    final numeric = RegExp(
+      r'^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$',
+    ).firstMatch(raw);
+
+    if (numeric != null) {
+      final day = int.tryParse(numeric.group(1)!);
+      final month = int.tryParse(numeric.group(2)!);
+      final year = int.tryParse(numeric.group(3)!);
+
+      if (day != null && month != null && year != null) {
+        final parsed = DateTime(year, month, day);
+        if (parsed.year == year &&
+            parsed.month == month &&
+            parsed.day == day) {
+          return parsed;
+        }
+      }
+    }
+
+    const weekdays = <String, int>{
+      'monday': DateTime.monday,
+      'tuesday': DateTime.tuesday,
+      'wednesday': DateTime.wednesday,
+      'thursday': DateTime.thursday,
+      'friday': DateTime.friday,
+      'saturday': DateTime.saturday,
+      'sunday': DateTime.sunday,
+    };
+
+    for (final entry in weekdays.entries) {
+      if (lower == entry.key || lower == 'next ${entry.key}') {
+        var daysAhead = (entry.value - today.weekday) % 7;
+
+        if (lower.startsWith('next ') || daysAhead == 0) {
+          daysAhead = daysAhead == 0 ? 7 : daysAhead;
+        }
+
+        return today.add(Duration(days: daysAhead));
+      }
+    }
+
+    return null;
+  }
+
+  int _compareInboxTasks(SayDoTask a, SayDoTask b) {
+    final priorityCompare =
+        _priorityRank(a.priority).compareTo(_priorityRank(b.priority));
+
+    if (priorityCompare != 0) {
+      return priorityCompare;
+    }
+
+    final aDate = _taskDate(a);
+    final bDate = _taskDate(b);
+
+    if (aDate != null && bDate != null) {
+      final dateCompare = aDate.compareTo(bDate);
+      if (dateCompare != 0) {
+        return dateCompare;
+      }
+    } else if (aDate != null) {
+      return -1;
+    } else if (bDate != null) {
+      return 1;
+    }
+
+    final timeCompare =
+        (a.time ?? '99:99').compareTo(b.time ?? '99:99');
+    if (timeCompare != 0) {
+      return timeCompare;
+    }
+
+    return a.createdAt.compareTo(b.createdAt);
   }
 
   DateTime _todayDateOnly() {
@@ -3477,7 +4496,8 @@ class _HomeScreenState extends State<HomeScreen>
               task.type != 'note' &&
               _taskDate(task) == null,
         )
-        .toList();
+        .toList()
+      ..sort(_compareInboxTasks);
 
     final upcoming = _savedTasks
         .where(
@@ -3485,7 +4505,8 @@ class _HomeScreenState extends State<HomeScreen>
               !task.completed &&
               _isFutureTask(task),
         )
-        .toList();
+        .toList()
+      ..sort(_compareInboxTasks);
 
     final completed = _savedTasks
         .where((task) => task.completed)
@@ -3579,7 +4600,7 @@ class _HomeScreenState extends State<HomeScreen>
           _inboxSectionHeader(
             'UPCOMING',
             upcoming.length,
-            'Scheduled beyond today',
+            'Future tasks • High priority first',
           ),
           const SizedBox(height: 12),
           ...upcoming.map(
@@ -3833,11 +4854,12 @@ class _HomeScreenState extends State<HomeScreen>
                           .toUpperCase(),
                       Icons.sell_outlined,
                     ),
-                    if (task.priority == 'high')
-                      _inboxBadge(
-                        'High priority',
-                        Icons.priority_high_rounded,
-                      ),
+                    _inboxBadge(
+                      '${_priorityLabel(task.priority)} priority',
+                      task.priority == 'high'
+                          ? Icons.priority_high_rounded
+                          : Icons.flag_outlined,
+                    ),
                   ],
                 ),
                 if (task.notes != null &&
@@ -4899,12 +5921,9 @@ class _HomeScreenState extends State<HomeScreen>
       }
     }
 
-    if (task.priority ==
-        'high') {
-      details.add(
-        'High priority',
-      );
-    }
+    details.add(
+      '${_priorityLabel(task.priority)} priority',
+    );
 
     return details.join(
       ' • ',
@@ -4943,7 +5962,9 @@ class _TaskEditSheetState extends State<TaskEditSheet> {
       text: widget.task.notes ?? '',
     );
 
-    _priority = widget.task.priority;
+    _priority = widget.task.priority == 'medium'
+        ? 'normal'
+        : widget.task.priority;
 
     if (widget.task.date != null &&
         widget.task.date!.trim().isNotEmpty) {
@@ -5172,7 +6193,7 @@ class _TaskEditSheetState extends State<TaskEditSheet> {
                 ),
                 DropdownMenuItem(
                   value: 'normal',
-                  child: Text('Normal'),
+                  child: Text('Medium'),
                 ),
                 DropdownMenuItem(
                   value: 'high',
